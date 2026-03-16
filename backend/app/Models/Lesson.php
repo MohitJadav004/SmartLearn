@@ -27,4 +27,12 @@ class Lesson extends Model
     {
         return $this->belongsTo(Chapter::class);
     }
+
+    /**
+     * Get the completions for this lesson.
+     */
+    public function completions()
+    {
+        return $this->hasMany(LessonCompletion::class);
+    }
 }

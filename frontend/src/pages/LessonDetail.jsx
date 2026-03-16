@@ -21,6 +21,17 @@ export const LessonDetail = () => {
   useEffect(() => {
     // reset completion state for the incoming lesson
     setIsLessonCompleted(user?.role === 'teacher');
+    
+    // Check if this lesson was already marked completed by the student
+    if (user?.role !== 'teacher') {
+      const key = `course_${courseId}_completed_lessons`;
+      const completed = localStorage.getItem(key);
+      const completedLessons = completed ? JSON.parse(completed) : [];
+      if (completedLessons.includes(parseInt(lessonId))) {
+        setIsLessonCompleted(true);
+      }
+    }
+    
     fetchLessonDetails();
   }, [lessonId, chapterId, courseId, user?.role]);
 
@@ -132,6 +143,33 @@ export const LessonDetail = () => {
     }
   };
 
+  const handleCompleteLesson = async () => {
+    // Mark lesson as complete
+    setIsLessonCompleted(true);
+    
+    // Save completed lesson to localStorage
+    const key = `course_${courseId}_completed_lessons`;
+    const completed = localStorage.getItem(key);
+    const completedLessons = completed ? JSON.parse(completed) : [];
+    
+    if (!completedLessons.includes(parseInt(lessonId))) {
+      completedLessons.push(parseInt(lessonId));
+      localStorage.setItem(key, JSON.stringify(completedLessons));
+    }
+
+    // Save to backend
+    try {
+      console.log('Saving lesson completion to backend:', lessonId);
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/lessons/${lessonId}/complete`
+      );
+      console.log('Lesson completion saved:', response.data);
+    } catch (error) {
+      console.error('Failed to save lesson completion to backend:', error);
+      // Still mark as complete locally even if backend fails
+    }
+  };
+
   const formatDuration = (seconds) => {
     if (!seconds) return 'Duration not specified';
     const hours = Math.floor(seconds / 3600);
@@ -160,7 +198,7 @@ export const LessonDetail = () => {
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
           <button
-            onClick={() => navigate(`/course/${courseId}`)}
+            onClick={() => navigate(user?.role === 'teacher' ? `/course/${courseId}` : `/student-course/${courseId}`)}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
           >
             Back to Course
@@ -176,7 +214,7 @@ export const LessonDetail = () => {
         <div className="text-center">
           <p className="text-gray-600 mb-4">Lesson not found</p>
           <button
-            onClick={() => navigate(`/course/${courseId}`)}
+            onClick={() => navigate(user?.role === 'teacher' ? `/course/${courseId}` : `/student-course/${courseId}`)}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg"
           >
             Back to Course
@@ -193,7 +231,7 @@ export const LessonDetail = () => {
 
       {/* Back Button - Full Width Far Left */}
       <button
-        onClick={() => navigate(`/course/${courseId}`)}
+        onClick={() => navigate(user?.role === 'teacher' ? `/course/${courseId}` : `/student-course/${courseId}`)}
         className={`w-full text-left px-6 py-4 font-semibold inline-flex items-center gap-2 transition ${
           user?.role === 'teacher'
             ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
@@ -236,7 +274,7 @@ export const LessonDetail = () => {
                 {/* Mark Video as Complete Button for Students */}
                 {user?.role !== 'teacher' && !isLessonCompleted && (
                   <button
-                    onClick={() => setIsLessonCompleted(true)}
+                    onClick={handleCompleteLesson}
                     className="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 text-sm"
                   >
                     ✓ Mark Video as Complete
@@ -271,7 +309,7 @@ export const LessonDetail = () => {
                 {/* Mark Document as Complete for students */}
                 {user?.role !== 'teacher' && !isLessonCompleted && (
                   <button
-                    onClick={() => setIsLessonCompleted(true)}
+                    onClick={handleCompleteLesson}
                     className="mt-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 text-sm"
                   >
                     ✓ Mark Document as Complete
@@ -371,7 +409,7 @@ export const LessonDetail = () => {
 
               {/* Back Button */}
               <button
-                onClick={() => navigate(`/course/${courseId}`)}
+                onClick={() => navigate(user?.role === 'teacher' ? `/course/${courseId}` : `/student-course/${courseId}`)}
                 className="w-full bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-3 px-4 rounded-lg transition duration-200 mt-6"
               >
                 Back to Course

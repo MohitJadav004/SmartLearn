@@ -115,9 +115,10 @@ export const StudentDashboard = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {courses.map((course, index) => (
-                <div
+                <button
                   key={course.id}
-                  className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-md border border-slate-200 overflow-hidden card-shadow-hover fade-in hover:border-sky-200"
+                  onClick={() => handleEnrollCourse(course.id)}
+                  className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-md border border-slate-200 overflow-hidden card-shadow-hover fade-in hover:border-sky-200 text-left cursor-pointer transition-all hover:shadow-lg"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {/* Course Image */}
@@ -173,17 +174,14 @@ export const StudentDashboard = () => {
                     </div>
 
                     {/* Enroll Button */}
-                    <button
-                      onClick={() => handleEnrollCourse(course.id)}
-                      className="w-full btn-primary flex items-center justify-center gap-2 py-2.5 font-semibold"
-                    >
+                    <div className="w-full btn-primary flex items-center justify-center gap-2 py-2.5 font-semibold bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg hover:from-sky-600 hover:to-blue-700">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                       </svg>
-                      Enroll Now
-                    </button>
+                      View Course Details
+                    </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

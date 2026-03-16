@@ -14,6 +14,9 @@ export const StudentCourseDetail = () => {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [unenrolling, setUnenrolling] = useState(false);
+  const [hasStartedLearning, setHasStartedLearning] = useState(false);
+  const [completedLessonsCount, setCompletedLessonsCount] = useState(0);
+  const [totalLessonsCount, setTotalLessonsCount] = useState(0);
 
   const fetchCourseDetails = useCallback(async () => {
     try {
@@ -45,25 +48,77 @@ export const StudentCourseDetail = () => {
   }, [courseId, navigate]);
 
   const checkEnrollmentStatus = useCallback(async () => {
+    if (!user) return;
+    
+    // Skip API call if we already have enrollment status in localStorage
+    const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
+    if (enrolledFromStorage !== null) {
+      return; // Already have status in storage, no need to call API
+    }
+    
     try {
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/courses/${courseId}/check-enrollment`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
+        `${import.meta.env.VITE_API_URL}/courses/${courseId}/check-enrollment`
       );
       setIsEnrolled(response.data.enrolled);
+      // Store the response in localStorage for future visits
+      if (response.data.enrolled) {
+        localStorage.setItem(`course_${courseId}_enrolled`, 'true');
+      }
     } catch (error) {
       console.error('Failed to check enrollment status:', error);
+    }
+  }, [courseId, user]);
+
+  const fetchStudentProgress = useCallback(async () => {
+    try {
+      console.log('Fetching student progress for course:', courseId);
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/courses/${courseId}/progress`
+      );
+      console.log('Progress response:', response.data);
+      if (response.data.success) {
+        setCompletedLessonsCount(response.data.data.completed_lessons);
+        setTotalLessonsCount(response.data.data.total_lessons);
+        console.log('Updated progress - Completed:', response.data.data.completed_lessons, 'Total:', response.data.data.total_lessons);
+      }
+    } catch (error) {
+      console.error('Failed to fetch progress:', error);
+      // Fall back to localStorage calculation
     }
   }, [courseId]);
 
   useEffect(() => {
     fetchCourseDetails();
+    
+    // Check localStorage first for instant enrollment status (prevents flash)
+    const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
+    if (enrolledFromStorage === 'true') {
+      setIsEnrolled(true);
+    }
+    
+    // Then verify with API in background
     checkEnrollmentStatus();
-  }, [fetchCourseDetails, checkEnrollmentStatus]);
+    
+    // Fetch student progress from backend
+    if (user) {
+      fetchStudentProgress();
+    }
+    
+    // Check if user has started learning from localStorage
+    const started = localStorage.getItem(`course_${courseId}_started`);
+    setHasStartedLearning(!!started);
+
+    // Refresh progress when window regains focus (user returns from lesson)
+    const handleFocus = () => {
+      if (user) {
+        fetchStudentProgress();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchCourseDetails, checkEnrollmentStatus, courseId, user, fetchStudentProgress]);
 
   const handleEnroll = async () => {
     if (!user) {
@@ -73,18 +128,15 @@ export const StudentCourseDetail = () => {
 
     try {
       setEnrolling(true);
+      // axios already has authorization header set from AuthContext
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/courses/${courseId}/enroll`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
+        `${import.meta.env.VITE_API_URL}/courses/${courseId}/enroll`
       );
 
       if (response.data.success) {
         setIsEnrolled(true);
+        // Store enrollment status in localStorage to prevent flash on page reload
+        localStorage.setItem(`course_${courseId}_enrolled`, 'true');
         // Update course students count
         if (course) {
           setCourse({
@@ -92,6 +144,8 @@ export const StudentCourseDetail = () => {
             students_count: (course.students_count || 0) + 1
           });
         }
+        // Refresh progress data
+        await fetchStudentProgress();
         alert('Successfully enrolled in the course!');
         // Clear cache
         apiCache.clear(`student:course:${courseId}`);
@@ -99,8 +153,16 @@ export const StudentCourseDetail = () => {
     } catch (error) {
       console.error('Failed to enroll:', error);
       if (error.response?.status === 409) {
-        alert('You are already enrolled in this course');
+        // Already enrolled
         setIsEnrolled(true);
+        alert('You are already enrolled in this course');
+      } else if (error.response?.data?.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        navigate('/login');
+      } else if (error.message === 'Network Error') {
+        alert('Network error. Please check your connection and try again.');
       } else {
         alert('Failed to enroll. Please try again.');
       }
@@ -116,17 +178,15 @@ export const StudentCourseDetail = () => {
 
     try {
       setUnenrolling(true);
+      // axios already has authorization header set from AuthContext
       const response = await axios.delete(
-        `${import.meta.env.VITE_API_URL}/courses/${courseId}/unenroll`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
+        `${import.meta.env.VITE_API_URL}/courses/${courseId}/unenroll`
       );
 
       if (response.data.success) {
         setIsEnrolled(false);
+        // Remove enrollment status from localStorage
+        localStorage.removeItem(`course_${courseId}_enrolled`);
         // Update course students count
         if (course) {
           setCourse({
@@ -139,10 +199,90 @@ export const StudentCourseDetail = () => {
       }
     } catch (error) {
       console.error('Failed to unenroll:', error);
-      alert('Failed to unenroll. Please try again.');
+      if (error.response?.status === 404) {
+        setIsEnrolled(false);
+        alert('You are not enrolled in this course');
+      } else if (error.response?.data?.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        navigate('/login');
+      } else {
+        alert('Failed to unenroll. Please try again.');
+      }
     } finally {
       setUnenrolling(false);
     }
+  };
+
+  const getCompletedLessons = () => {
+    const completed = localStorage.getItem(`course_${courseId}_completed_lessons`);
+    return completed ? JSON.parse(completed) : [];
+  };
+
+  const getNextIncompleteLesson = () => {
+    const completedLessons = getCompletedLessons();
+    
+    if (!course || !course.chapters || course.chapters.length === 0) {
+      return null;
+    }
+
+    // Loop through all chapters and lessons to find first incomplete lesson
+    for (let chapter of course.chapters) {
+      if (chapter.lessons && chapter.lessons.length > 0) {
+        for (let lesson of chapter.lessons) {
+          if (!completedLessons.includes(lesson.id)) {
+            return { chapter, lesson };
+          }
+        }
+      }
+    }
+    
+    return null; // All lessons completed
+  };
+
+  const getProgressPercentage = () => {
+    if (!course || !course.chapters || course.chapters.length === 0) {
+      return 0;
+    }
+
+    // If we have API data, use that
+    if (totalLessonsCount > 0) {
+      return Math.round((completedLessonsCount / totalLessonsCount) * 100);
+    }
+
+    // Fall back to localStorage calculation
+    let totalLessons = 0;
+    for (let chapter of course.chapters) {
+      if (chapter.lessons && chapter.lessons.length > 0) {
+        totalLessons += chapter.lessons.length;
+      }
+    }
+
+    if (totalLessons === 0) return 0;
+
+    const completedLessons = getCompletedLessons();
+    return Math.round((completedLessons.length / totalLessons) * 100);
+  };
+
+  const handleStartLearning = () => {
+    const nextLesson = getNextIncompleteLesson();
+    
+    if (!nextLesson) {
+      alert('All lessons completed! Great job!');
+      return;
+    }
+
+    // Mark course as started
+    localStorage.setItem(`course_${courseId}_started`, 'true');
+    setHasStartedLearning(true);
+    navigate(`/course/${courseId}/chapter/${nextLesson.chapter.id}/lesson/${nextLesson.lesson.id}`);
+  };
+
+  const handleLessonClick = (chapterId, lessonId, isCompleted) => {
+    // Only allow clicking completed lessons
+    if (!isCompleted) return;
+    navigate(`/course/${courseId}/chapter/${chapterId}/lesson/${lessonId}`);
   };
 
   if (loading) {
@@ -184,7 +324,7 @@ export const StudentCourseDetail = () => {
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
-        Back to Courses
+        Back to Dashboard
       </button>
 
       {/* Title Section */}
@@ -238,7 +378,7 @@ export const StudentCourseDetail = () => {
             </div>
 
             {/* Requirements */}
-            <div className="mb-8">
+            <div className="mb-8 pb-8 border-b border-slate-200">
               <h3 className="text-2xl font-bold text-slate-900 mb-4">Requirements</h3>
               {course.requirements ? (
                 <ul className="space-y-3">
@@ -251,6 +391,67 @@ export const StudentCourseDetail = () => {
                 </ul>
               ) : (
                 <p className="text-slate-600 italic">No requirements specified.</p>
+              )}
+            </div>
+
+            {/* Course Structure - Chapters & Lessons */}
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold text-slate-900 mb-6">Course Structure</h3>
+              {course.chapters && course.chapters.length > 0 ? (
+                <div className="space-y-4">
+                  {course.chapters.map((chapter, chapterIdx) => (
+                    <div key={chapter.id} className="bg-gradient-to-r from-sky-50 to-blue-50 rounded-lg border border-sky-200 overflow-hidden">
+                      <div className="p-4 bg-sky-100 border-b border-sky-200">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center text-sm font-bold">{chapterIdx + 1}</span>
+                          <h4 className="text-lg font-bold text-slate-900">{chapter.name || chapter.title || `Chapter ${chapterIdx + 1}`}</h4>
+                          {chapter.lessons && chapter.lessons.length > 0 && (
+                            <span className="ml-auto text-xs font-semibold text-sky-700 bg-white px-3 py-1 rounded-full">
+                              {chapter.lessons.length} lesson{chapter.lessons.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {chapter.lessons && chapter.lessons.length > 0 && (
+                        <div className="p-4 space-y-2">
+                          {chapter.lessons.map((lesson, lessonIdx) => {
+                            const isCompleted = getCompletedLessons().includes(lesson.id);
+                            return (
+                              <button
+                                key={lesson.id}
+                                onClick={() => handleLessonClick(chapter.id, lesson.id, isCompleted)}
+                                disabled={!isCompleted}
+                                className={`w-full text-left flex items-start gap-3 p-3 rounded transition ${
+                                  isCompleted
+                                    ? 'hover:bg-green-100 cursor-pointer'
+                                    : 'cursor-not-allowed opacity-50 bg-gray-50'
+                                } ${isCompleted ? 'bg-green-50' : ''}`}
+                              >
+                                <span className={`font-bold flex-shrink-0 mt-1 ${
+                                  isCompleted ? 'text-green-600' : 'text-gray-400'
+                                }`}>
+                                  {isCompleted ? '✓' : '🔒'}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium text-sm ${
+                                    isCompleted ? 'text-green-900 line-through' : 'text-gray-500'
+                                  }`}>
+                                    {lesson.title || `Lesson ${lessonIdx + 1}`}
+                                  </p>
+                                  {lesson.duration && <p className={`text-xs mt-1 ${isCompleted ? 'text-slate-600' : 'text-gray-400'}`}>{lesson.duration}</p>}
+                                  {!isCompleted && <p className="text-xs text-gray-500 mt-1 italic">Complete previous lessons to unlock</p>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-600 italic">No course structure available yet.</p>
               )}
             </div>
           </div>
@@ -282,13 +483,32 @@ export const StudentCourseDetail = () => {
 
               {/* Enrollment Status Badge */}
               {isEnrolled && (
-                <div className="mb-4 p-3 bg-green-100 rounded-lg border border-green-300">
-                  <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="green" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    You are enrolled
-                  </p>
+                <div className="mb-6 space-y-3">
+                  <div className="p-3 bg-green-100 rounded-lg border border-green-300">
+                    <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="green" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      You are enrolled ✓
+                    </p>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-lg border border-sky-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-slate-900">Course Progress</p>
+                      <p className="text-sm font-bold text-sky-600">{getProgressPercentage()}%</p>
+                    </div>
+                    <div className="w-full bg-sky-200 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-sky-500 to-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${getProgressPercentage()}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-2">
+                      {getCompletedLessons().length} of {course.chapters?.reduce((total, ch) => total + (ch.lessons?.length || 0), 0)} lessons completed
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -309,31 +529,35 @@ export const StudentCourseDetail = () => {
                   )}
                 </button>
               ) : (
-                <button
-                  onClick={handleUnenroll}
-                  disabled={unenrolling}
-                  className="w-full py-3 px-4 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {unenrolling ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Unenrolling...
-                    </div>
-                  ) : (
-                    'Unenroll'
-                  )}
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleStartLearning}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-emerald-700 transition flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {hasStartedLearning ? 'Continue Learning' : 'Start Learning'}
+                  </button>
+
+                  <button
+                    onClick={handleUnenroll}
+                    disabled={unenrolling}
+                    className="w-full py-3 px-4 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {unenrolling ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Unenrolling...
+                      </div>
+                    ) : (
+                      'Unenroll'
+                    )}
+                  </button>
+                </div>
               )}
 
-              {/* Continue Learning Button */}
-              {isEnrolled && (
-                <button
-                  onClick={() => navigate(`/lesson/${course.id}`)}
-                  className="w-full mt-3 py-3 px-4 bg-slate-200 text-slate-900 font-bold rounded-lg hover:bg-slate-300 transition"
-                >
-                  Continue Learning
-                </button>
-              )}
             </div>
           </div>
         </div>

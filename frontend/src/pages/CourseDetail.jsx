@@ -11,7 +11,7 @@ import AddLessonModal from '../components/AddLessonModal';
 export const CourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth(); 
   const [course, setCourse] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);

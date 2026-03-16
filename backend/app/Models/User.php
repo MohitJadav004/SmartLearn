@@ -73,4 +73,12 @@ class User extends Authenticatable
     {
         return $this->enrolledCourses()->where('course_id', $course->id)->exists();
     }
+
+    /**
+     * Get all lesson completions for this user.
+     */
+    public function lessonCompletions()
+    {
+        return $this->hasMany(LessonCompletion::class);
+    }
 }

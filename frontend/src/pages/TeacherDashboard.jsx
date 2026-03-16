@@ -13,7 +13,7 @@ export const TeacherDashboard = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [studentsModal, setStudentsModal] = useState({ isOpen: false, courseId: null, courseName: '', students: [], loading: false });
+  const [studentsModal, setStudentsModal] = useState({ isOpen: false, courseId: null, courseName: '', students: [], loading: false, courseData: null });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCourses, setTotalCourses] = useState(0);
@@ -103,11 +103,16 @@ export const TeacherDashboard = () => {
 
   const handleViewStudents = async (courseId, courseName) => {
     try {
-      setStudentsModal({ ...studentsModal, courseId, courseName, loading: true, isOpen: true });
+      setStudentsModal({ ...studentsModal, courseId, courseName, loading: true, isOpen: true, courseData: null });
       
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/courses/${courseId}/students`,
         { params: { per_page: 100 } }
+      );
+
+      // Also fetch course data to get chapter/lesson info
+      const courseResponse = await axios.get(
+        `${import.meta.env.VITE_API_URL}/courses/${courseId}`
       );
 
       if (response.data.success) {
@@ -116,7 +121,8 @@ export const TeacherDashboard = () => {
           courseId,
           courseName,
           students: response.data.data,
-          loading: false
+          loading: false,
+          courseData: courseResponse.data.data
         });
       }
     } catch (error) {
@@ -124,6 +130,27 @@ export const TeacherDashboard = () => {
       alert('Failed to load enrolled students');
       setStudentsModal({ ...studentsModal, isOpen: false });
     }
+  };
+
+  const getStudentProgress = (student) => {
+    if (!studentsModal.courseData || !studentsModal.courseData.chapters) {
+      return 0;
+    }
+
+    // Calculate total lessons in course
+    let totalLessons = 0;
+    for (let chapter of studentsModal.courseData.chapters) {
+      if (chapter.lessons && chapter.lessons.length > 0) {
+        totalLessons += chapter.lessons.length;
+      }
+    }
+
+    if (totalLessons === 0) return 0;
+
+    // Get completed lessons from student data if available
+    // This will be enhanced once backend tracks student progress
+    const completedLessons = student.completed_lessons_count || 0;
+    return Math.round((completedLessons / totalLessons) * 100);
   };
 
   // Show full-page loading only on initial load
@@ -245,48 +272,44 @@ export const TeacherDashboard = () => {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {courses.map((course, index) => (
                 <div 
                   key={course.id} 
-                  className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-md border border-slate-200 overflow-hidden hover:border-emerald-200 card-shadow-hover fade-in transition-all"
+                  className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-md border border-slate-200 overflow-hidden hover:border-emerald-200 card-shadow-hover fade-in transition-all flex flex-col"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <div className="p-8">
-                    <div className="flex items-start justify-between gap-6">
-                      <div className="flex-1">
-                        <h4 className="text-2xl font-bold text-slate-900 mb-3 hover:text-emerald-600 transition-colors">{course.title}</h4>
-                        <p className="text-slate-600 text-sm mb-5 leading-relaxed line-clamp-2">{course.description}</p>
-                        <div className="flex flex-wrap items-center gap-6 text-sm text-slate-600">
-                          <span className="flex items-center gap-2 font-medium">
-                            <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M10.5 1.5H1.5A1.5 1.5 0 0 0 0 3v14a1.5 1.5 0 0 0 1.5 1.5h17a1.5 1.5 0 0 0 1.5-1.5V6.5a1.5 1.5 0 0 0-1.5-1.5H10.5V1.5z"/>
-                            </svg>
-                            {course.students_count || 0} students
-                          </span>
-                          <span className="flex items-center gap-2 font-medium">
-                            <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-                            </svg>
-                            {course.chapters_count || 0} chapters
-                          </span>
-                          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold ${
-                            course.status === 'Published'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            <span className={`w-2 h-2 rounded-full ${course.status === 'Published' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
-                            {course.status}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="p-6 flex-1 flex flex-col">
+                    <h4 className="text-xl font-bold text-slate-900 mb-2 hover:text-emerald-600 transition-colors line-clamp-2">{course.title}</h4>
+                    <p className="text-slate-600 text-sm mb-4 leading-relaxed line-clamp-2 flex-1">{course.description}</p>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mb-4">
+                      <span className="flex items-center gap-1 font-medium">
+                        <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10.5 1.5H1.5A1.5 1.5 0 0 0 0 3v14a1.5 1.5 0 0 0 1.5 1.5h17a1.5 1.5 0 0 0 1.5-1.5V6.5a1.5 1.5 0 0 0-1.5-1.5H10.5V1.5z"/>
+                        </svg>
+                        {course.students_count || 0} students
+                      </span>
+                      <span className="flex items-center gap-1 font-medium">
+                        <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
+                        </svg>
+                        {course.chapters_count || 0} chapters
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+                        course.status === 'Published'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${course.status === 'Published' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
+                        {course.status}
+                      </span>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-3 mt-8 pt-8 border-t border-slate-200">
+                    <div className="flex flex-col gap-2 pt-4 border-t border-slate-200">
                       <button
                         onClick={() => navigate(`/course/${course.id}`)}
-                        className="btn-primary py-2.5 px-5 inline-flex items-center gap-2 font-semibold"
+                        className="btn-primary w-full py-2 px-3 inline-flex items-center justify-center gap-2 font-semibold text-sm"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -294,19 +317,21 @@ export const TeacherDashboard = () => {
                         Manage
                       </button>
 
-                      <button
-                        onClick={() => handleViewStudents(course.id, course.title)}
-                        className="py-2.5 px-5 rounded-lg font-semibold inline-flex items-center gap-2 transition-all bg-sky-100 hover:bg-sky-200 text-sky-900"
-                      >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM0 16.68a6 6 0 0112 0M16 12a4 4 0 11-8 0 4 4 0 018 0zm1 6a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        View Students ({course.students_count || 0})
-                      </button>
+                      {course.status === 'Published' && (
+                        <button
+                          onClick={() => handleViewStudents(course.id, course.title)}
+                          className="w-full py-2 px-3 rounded-lg font-semibold text-sm inline-flex items-center justify-center gap-2 transition-all bg-sky-100 hover:bg-sky-200 text-sky-900"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM0 16.68a6 6 0 0112 0M16 12a4 4 0 11-8 0 4 4 0 018 0zm1 6a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          View Students
+                        </button>
+                      )}
 
                       <button
                         onClick={() => handlePublishCourse(course.id, course.status)}
-                        className={`py-2.5 px-5 rounded-lg font-semibold inline-flex items-center gap-2 transition-all ${
+                        className={`w-full py-2 px-3 rounded-lg font-semibold text-sm inline-flex items-center justify-center gap-2 transition-all ${
                           course.status === 'Published'
                             ? 'bg-slate-200 hover:bg-slate-300 text-slate-900'
                             : 'bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white'
@@ -320,7 +345,7 @@ export const TeacherDashboard = () => {
 
                       <button
                         onClick={() => handleDeleteCourse(course.id)}
-                        className="btn-danger py-2.5 px-5 inline-flex items-center gap-2 font-semibold"
+                        className="btn-danger w-full py-2 px-3 inline-flex items-center justify-center gap-2 font-semibold text-sm"
                       >
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -416,20 +441,49 @@ export const TeacherDashboard = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {studentsModal.students.map((student) => (
-                      <div 
-                        key={student.id} 
-                        className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-sky-200 transition"
-                      >
-                        <div>
-                          <p className="font-semibold text-slate-900">{student.name}</p>
-                          <p className="text-sm text-slate-600">{student.email}</p>
+                    {studentsModal.students.map((student) => {
+                      const progress = getStudentProgress(student);
+                      const totalLessons = studentsModal.courseData?.chapters?.reduce((total, ch) => total + (ch.lessons?.length || 0), 0) || 0;
+                      const completedLessons = student.completed_lessons_count || 0;
+                      
+                      return (
+                        <div 
+                          key={student.id} 
+                          className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-sky-200 transition"
+                        >
+                          <div className="flex items-center gap-4">
+                            {/* Student Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-900 text-sm">{student.name}</p>
+                              <p className="text-xs text-slate-600 truncate">{student.email}</p>
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div className="flex-1 min-w-[120px]">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1">
+                                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className="bg-gradient-to-r from-sky-500 to-blue-600 h-1.5 rounded-full transition-all duration-500"
+                                      style={{ width: `${progress}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                                <p className="text-xs font-bold text-sky-600 min-w-[28px] text-right">{progress}%</p>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {completedLessons}/{totalLessons}
+                              </p>
+                            </div>
+
+                            {/* Status Badge */}
+                            <span className="text-xs px-2.5 py-1 bg-green-100 text-green-800 rounded-full font-semibold whitespace-nowrap">
+                              Enrolled
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-xs px-3 py-1 bg-green-100 text-green-800 rounded-full font-semibold">
-                          Enrolled
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

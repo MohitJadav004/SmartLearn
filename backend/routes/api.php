@@ -30,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/enrollments/my-courses', [EnrollmentController::class, 'myEnrollments']);
     Route::get('/courses/{course}/check-enrollment', [EnrollmentController::class, 'checkEnrollment']);
     Route::get('/courses/{course}/students', [EnrollmentController::class, 'courseEnrollments']);
+    Route::post('/lessons/{lesson}/complete', [EnrollmentController::class, 'completeLesson']);
+    Route::get('/courses/{course}/progress', [EnrollmentController::class, 'getStudentProgress']);
 
     // Chapter routes
     Route::get('/courses/{course}/chapters', [ChapterController::class, 'index']);
