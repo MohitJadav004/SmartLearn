@@ -1,13 +1,25 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
-const LessonList = ({ lessons, chapterId, onLessonDeleted }) => {
+const LessonList = ({ lessons, chapterId, onLessonDeleted, onLessonEdit }) => {
   const navigate = useNavigate();
   const { courseId } = useParams();
+  const { error: showError } = useToast();
+  const { showConfirm } = useConfirm();
 
   const handleDeleteLesson = async (lessonId) => {
-    if (window.confirm('Are you sure you want to delete this lesson?')) {
+    const confirmed = await showConfirm({
+      title: 'Delete Lesson',
+      message: 'Are you sure you want to delete this lesson?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true
+    });
+
+    if (confirmed) {
       try {
         await axios.delete(
           `${import.meta.env.VITE_API_URL}/chapters/${chapterId}/lessons/${lessonId}`
@@ -15,7 +27,7 @@ const LessonList = ({ lessons, chapterId, onLessonDeleted }) => {
         onLessonDeleted(chapterId, lessonId);
       } catch (error) {
         console.error('Failed to delete lesson:', error);
-        alert(error.response?.data?.message || 'Failed to delete lesson');
+        showError(error.response?.data?.message || 'Failed to delete lesson');
       }
     }
   };
@@ -56,6 +68,15 @@ const LessonList = ({ lessons, chapterId, onLessonDeleted }) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => onLessonEdit(lesson)}
+                    className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition-all"
+                    title="Edit lesson"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
                   <button
                     onClick={() => handleViewLesson(lesson.id)}
                     className="p-2 rounded-lg hover:bg-sky-100 text-sky-600 transition-all"

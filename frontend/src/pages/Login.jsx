@@ -23,7 +23,7 @@ export const Login = () => {
     if (result.success) {
       const user = result.data.user;
       // Redirect based on role
-      if (user.role === 'teacher') {
+      if (user.role === 'teacher') { 
         navigate('/teacher-dashboard');
       } else {
         navigate('/student-dashboard');

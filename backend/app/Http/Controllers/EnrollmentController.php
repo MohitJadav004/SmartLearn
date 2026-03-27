@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Lesson;
+use App\Models\LessonCompletion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -178,6 +179,23 @@ class EnrollmentController extends Controller
             ], 404);
         }
 
+        // Get all lesson IDs for this course
+        $lessonIds = $course->chapters()
+            ->with('lessons')
+            ->get()
+            ->flatMap(function($chapter) {
+                return $chapter->lessons->pluck('id');
+            })
+            ->toArray();
+
+        // Delete all lesson completions for this student in this course
+        if (!empty($lessonIds)) {
+            LessonCompletion::whereIn('lesson_id', $lessonIds)
+                ->where('user_id', $student->id)
+                ->delete();
+        }
+
+        // Delete the enrollment
         $enrollment->delete();
 
         // Decrement course students count

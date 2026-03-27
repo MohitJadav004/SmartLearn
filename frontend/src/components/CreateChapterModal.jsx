@@ -138,7 +138,7 @@ export const CreateChapterModal = ({ isOpen, onClose, courseId, onChapterCreated
                 disabled={loading}
                 className="flex-1 btn-primary py-3 px-6 font-semibold flex items-center justify-center gap-2"
               >
-                {loading ? (
+                {loading ? (  
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     <span>Creating Chapter...</span>

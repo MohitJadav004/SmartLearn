@@ -41,17 +41,17 @@ class LessonController extends Controller
                 'type' => 'required|in:video,document',
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string',
-                'content_url' => 'nullable|string', // For video URLs
-                'file' => 'nullable|file|mimes:mp4,pdf|max:51200', // 50MB max
+                'content_url' => 'nullable|string', // For video URLs only
+                'file' => 'nullable|file|mimes:pdf|max:51200', // 50MB max, PDF only
                 'file_name' => 'nullable|string',
                 'duration' => 'nullable|integer', // for videos
             ]);
 
             // Additional validation
-            if ($validated['type'] === 'video' && !$request->hasFile('file') && empty($validated['content_url'])) {
+            if ($validated['type'] === 'video' && empty($validated['content_url'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Either a video file or YouTube URL is required for video lessons',
+                    'message' => 'A video URL is required for video lessons',
                 ], 422);
             }
 

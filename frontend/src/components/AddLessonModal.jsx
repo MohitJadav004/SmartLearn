@@ -5,7 +5,6 @@ import { apiCache, CACHE_KEYS } from '../utils/apiCache';
 export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLessonCreated }) => {
   const [selectedChapterId, setSelectedChapterId] = useState(chapterId || '');
   const [lessonType, setLessonType] = useState('video');
-  const [contentSource, setContentSource] = useState('url'); // 'url' or 'file'
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -54,14 +53,8 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
       return;
     }
 
-    if (lessonType === 'video' && contentSource === 'url' && !formData.content_url.trim()) {
-      setError('YouTube URL is required for video lessons');
-      setLoading(false);
-      return;
-    }
-
-    if (lessonType === 'video' && contentSource === 'file' && !videoFile) {
-      setError('Please select a video (MP4) file');
+    if (lessonType === 'video' && !formData.content_url.trim()) {
+      setError('Video URL is required for video lessons');
       setLoading(false);
       return;
     }
@@ -72,18 +65,11 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
       return;
     }
 
-    // Validate file types
-    if (videoFile) {
-      if (lessonType === 'video' && !videoFile.name.toLowerCase().endsWith('.mp4')) {
-        setError('Only MP4 video files are allowed');
-        setLoading(false);
-        return;
-      }
-      if (lessonType === 'document' && !videoFile.name.toLowerCase().endsWith('.pdf')) {
-        setError('Only PDF files are allowed for documents');
-        setLoading(false);
-        return;
-      }
+    // Validate file types for documents
+    if (videoFile && lessonType === 'document' && !videoFile.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF files are allowed for documents');
+      setLoading(false);
+      return;
     }
 
     try {
@@ -93,7 +79,7 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
       formDataToSend.append('description', formData.description);
       formDataToSend.append('file_name', formData.file_name);
 
-      if (lessonType === 'video' && contentSource === 'url') {
+      if (lessonType === 'video') {
         formDataToSend.append('content_url', formData.content_url);
       } else if (videoFile) {
         formDataToSend.append('file', videoFile);
@@ -112,7 +98,6 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
       if (response.data && response.data.data) {
         setFormData({ title: '', description: '', content_url: '', file_name: '' });
         setVideoFile(null);
-        setContentSource('url');
         setSelectedChapterId('');
         // Clear related caches so next fetch gets fresh data
         apiCache.clear(CACHE_KEYS.CHAPTER(targetChapterId));
@@ -122,7 +107,6 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
       } else if (response.data) {
         setFormData({ title: '', description: '', content_url: '', file_name: '' });
         setVideoFile(null);
-        setContentSource('url');
         setSelectedChapterId('');
         // Clear related caches so next fetch gets fresh data
         apiCache.clear(CACHE_KEYS.CHAPTER(targetChapterId));
@@ -281,42 +265,11 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
               />
             </div>
 
-            {/* Content Source Selector - for Video Only */}
+            {/* Video Content: Video URL */}
             {lessonType === 'video' && (
-              <div className="bg-blue-50 p-6 rounded-xl border border-slate-200">
-                <label className="block text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                  <span>📺</span> Video Source
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex-1 flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 transition-all" style={{ borderColor: contentSource === 'url' ? '#3b82f6' : '#e2e8f0', backgroundColor: contentSource === 'url' ? '#eff6ff' : '#f8fafc' }}>
-                    <input
-                      type="radio"
-                      value="url"
-                      checked={contentSource === 'url'}
-                      onChange={(e) => setContentSource(e.target.value)}
-                      className="w-5 h-5"
-                    />
-                    <span className="text-base font-medium text-slate-900">YouTube URL</span>
-                  </label>
-                  <label className="flex-1 flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 transition-all" style={{ borderColor: contentSource === 'file' ? '#3b82f6' : '#e2e8f0', backgroundColor: contentSource === 'file' ? '#eff6ff' : '#f8fafc' }}>
-                    <input
-                      type="radio"
-                      value="file"
-                      checked={contentSource === 'file'}
-                      onChange={(e) => setContentSource(e.target.value)}
-                      className="w-5 h-5"
-                    />
-                    <span className="text-base font-medium text-slate-900">Upload MP4</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Video Content: YouTube URL */}
-            {lessonType === 'video' && contentSource === 'url' && (
               <div>
                 <label htmlFor="content_url" className="form-label flex items-center gap-1">
-                  YouTube URL
+                  Video URL
                   <span className="text-red-500 font-bold">*</span>
                 </label>
                 <input
@@ -327,42 +280,10 @@ export const AddLessonModal = ({ isOpen, onClose, chapterId, chapters = [], onLe
                   value={formData.content_url}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="https://youtube.com/watch?v=..."
+                  placeholder="https://youtube.com/watch?v=... or any video URL"
                 />
                 <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                  <span>💡</span> Paste a YouTube video URL
-                </p>
-              </div>
-            )}
-
-            {/* Video Content: MP4 Upload */}
-            {lessonType === 'video' && contentSource === 'file' && (
-              <div>
-                <label htmlFor="video_file" className="form-label flex items-center gap-1">
-                  Upload MP4 Video
-                  <span className="text-red-500 font-bold">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    id="video_file"
-                    type="file"
-                    accept=".mp4"
-                    onChange={handleFileChange}
-                    className="form-input file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-100 file:text-sky-700 hover:file:bg-sky-200 cursor-pointer"
-                  />
-                </div>
-                {videoFile && (
-                  <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-lg fade-in">
-                    <p className="text-sm text-green-800 font-medium flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(2)} MB)
-                    </p>
-                  </div>
-                )}
-                <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                  <span>📁</span> Only MP4 video files are supported
+                  <span>💡</span> Paste a video URL (YouTube, Vimeo, or direct video link)
                 </p>
               </div>
             )}

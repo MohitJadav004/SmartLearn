@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { apiCache, CACHE_KEYS } from '../utils/apiCache';
 import Header from '../components/Header';
 import CreateCourseModal from '../components/CreateCourseModal';
@@ -9,6 +11,8 @@ import CreateCourseModal from '../components/CreateCourseModal';
 export const TeacherDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { success, error: showError } = useToast();
+  const { showConfirm } = useConfirm();
   const [courses, setCourses] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -54,8 +58,8 @@ export const TeacherDashboard = () => {
         // Cache the response
         apiCache.set(cacheKey, response.data);
       }
-    } catch (error) {
-      console.error('Failed to fetch courses:', error);
+    } catch (err) {
+      console.error('Failed to fetch courses:', err);
     } finally {
       setLoading(false);
     }
@@ -69,17 +73,25 @@ export const TeacherDashboard = () => {
   };
 
   const handleDeleteCourse = async (courseId) => {
-    if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
+    const confirmed = await showConfirm({
+      title: 'Delete Course',
+      message: 'Are you sure you want to delete this course? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true
+    });
+
+    if (confirmed) {
       try {
         await axios.delete(`${import.meta.env.VITE_API_URL}/courses/${courseId}`);
         // Clear cache and refresh
         apiCache.clearPattern('courses:');
         apiCache.clear(CACHE_KEYS.COURSE(courseId));
         fetchCourses(currentPage);
-        alert('Course deleted successfully');
-      } catch (error) {
-        console.error('Failed to delete course:', error);
-        alert('Failed to delete course');
+        success('Course deleted successfully');
+      } catch (err) {
+        console.error('Failed to delete course:', err);
+        showError('Failed to delete course');
       }
     }
   };
@@ -94,10 +106,10 @@ export const TeacherDashboard = () => {
       apiCache.clearPattern('courses:');
       apiCache.clear(CACHE_KEYS.COURSE(courseId));
       fetchCourses(currentPage);
-      alert(`Course ${newStatus === 'Published' ? 'published' : 'unpublished'} successfully`);
-    } catch (error) {
-      console.error('Failed to update course status:', error);
-      alert('Failed to update course status');
+      success(`Course ${newStatus === 'Published' ? 'published' : 'unpublished'} successfully`);
+    } catch (err) {
+      console.error('Failed to update course status:', err);
+      showError('Failed to update course status');
     }
   };
 
@@ -127,7 +139,7 @@ export const TeacherDashboard = () => {
       }
     } catch (error) {
       console.error('Failed to fetch students:', error);
-      alert('Failed to load enrolled students');
+      showError('Failed to load enrolled students');
       setStudentsModal({ ...studentsModal, isOpen: false });
     }
   };
@@ -472,7 +484,7 @@ export const TeacherDashboard = () => {
                                 <p className="text-xs font-bold text-sky-600 min-w-[28px] text-right">{progress}%</p>
                               </div>
                               <p className="text-xs text-slate-500 mt-0.5">
-                                {completedLessons}/{totalLessons}
+                                {completedLessons}/{totalLessons} lessons
                               </p>
                             </div>
 

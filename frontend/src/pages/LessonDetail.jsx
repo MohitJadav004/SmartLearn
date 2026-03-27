@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { apiCache, CACHE_KEYS } from '../utils/apiCache';
 import Header from '../components/Header';
+import VideoPlayer from '../components/VideoPlayer';
 
 export const LessonDetail = () => {
   const { courseId, chapterId, lessonId } = useParams();
@@ -259,18 +260,7 @@ export const LessonDetail = () => {
             {/* Video/Document Preview */}
             {lesson.type === 'video' ? (
               <div className="mb-8">
-                <div className="bg-black rounded-lg overflow-hidden aspect-video mb-4">
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    src={`https://www.youtube.com/embed/${extractYoutubeId(lesson.content_url)}`}
-                    title={lesson.title}
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    className="w-full h-full"
-                  ></iframe>
-                </div>
+                <VideoPlayer videoUrl={lesson.content_url} title={lesson.title} />
                 {/* Mark Video as Complete Button for Students */}
                 {user?.role !== 'teacher' && !isLessonCompleted && (
                   <button
@@ -421,13 +411,5 @@ export const LessonDetail = () => {
     </div>
   );
 };
-
-// Helper function to extract YouTube video ID
-function extractYoutubeId(url) {
-  if (!url) return '';
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11 ? match[2] : '';
-}
 
 export default LessonDetail;

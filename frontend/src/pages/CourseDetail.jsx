@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { apiCache, CACHE_KEYS } from '../utils/apiCache';
 import Header from '../components/Header';
 import ChapterList from '../components/ChapterList';
@@ -11,7 +12,8 @@ import AddLessonModal from '../components/AddLessonModal';
 export const CourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { user, logout } = useAuth(); 
+  const { user, logout } = useAuth();
+  const { error: showError } = useToast(); 
   const [course, setCourse] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,9 +69,9 @@ export const CourseDetail = () => {
         });
         setChapterLessons(lessonsData);
       }
-    } catch (error) {
-      console.error('Failed to fetch course:', error);
-      alert('Failed to load course');
+    } catch (err) {
+      console.error('Failed to fetch course:', err);
+      showError('Failed to load course');
       navigate('/teacher-dashboard');
     } finally {
       setLoading(false);
@@ -95,6 +97,18 @@ export const CourseDetail = () => {
       [chapterId]: [...(prev[chapterId] || []), newLesson],
     }));
     setLessonModal({ isOpen: false, chapterId: null });
+    // Invalidate course cache
+    apiCache.clear(CACHE_KEYS.COURSE(courseId));
+  };
+
+  const handleLessonUpdated = (chapterId, updatedLesson) => {
+    // Replace the lesson in the list instead of appending it
+    setChapterLessons((prev) => ({
+      ...prev,
+      [chapterId]: (prev[chapterId] || []).map((lesson) =>
+        lesson.id === updatedLesson.id ? updatedLesson : lesson
+      ),
+    }));
     // Invalidate course cache
     apiCache.clear(CACHE_KEYS.COURSE(courseId));
   };
@@ -278,6 +292,7 @@ export const CourseDetail = () => {
                 onLessonCreated={handleLessonCreated}
                 onLoadLessons={handleLoadChapterLessons}
                 onLessonDeleted={handleLessonDeleted}
+                onLessonUpdated={handleLessonUpdated}
               />
             </div>
           </div>

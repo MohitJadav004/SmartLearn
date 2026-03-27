@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { apiCache, CACHE_KEYS } from '../utils/apiCache';
 import Header from '../components/Header';
 
 export const StudentCourseDetail = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  const { success, error, info } = useToast();
+  const { showConfirm } = useConfirm();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [isEnrolled, setIsEnrolled] = useState(location.state?.isEnrolled ?? false);
   const [enrolling, setEnrolling] = useState(false);
   const [unenrolling, setUnenrolling] = useState(false);
   const [hasStartedLearning, setHasStartedLearning] = useState(false);
@@ -38,32 +43,31 @@ export const StudentCourseDetail = () => {
         setCourse(response.data.data);
         apiCache.set(cacheKey, response.data, 10 * 60 * 1000);
       }
-    } catch (error) {
-      console.error('Failed to fetch course:', error);
-      alert('Failed to load course');
+    } catch (err) {
+      console.error('Failed to fetch course:', err);
+      error('Failed to load course');
       navigate('/student-dashboard');
     } finally {
       setLoading(false);
     }
-  }, [courseId, navigate]);
+  }, [courseId, navigate, error]);
 
   const checkEnrollmentStatus = useCallback(async () => {
     if (!user) return;
     
-    // Skip API call if we already have enrollment status in localStorage
-    const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
-    if (enrolledFromStorage !== null) {
-      return; // Already have status in storage, no need to call API
-    }
-    
     try {
+      // Always call API to get fresh enrollment status
+      // Don't rely on localStorage as it can become stale
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/courses/${courseId}/check-enrollment`
       );
       setIsEnrolled(response.data.enrolled);
-      // Store the response in localStorage for future visits
+      // Update localStorage with fresh status
       if (response.data.enrolled) {
         localStorage.setItem(`course_${courseId}_enrolled`, 'true');
+      } else {
+        // Clear the enrolled flag if user is not enrolled
+        localStorage.removeItem(`course_${courseId}_enrolled`);
       }
     } catch (error) {
       console.error('Failed to check enrollment status:', error);
@@ -91,13 +95,8 @@ export const StudentCourseDetail = () => {
   useEffect(() => {
     fetchCourseDetails();
     
-    // Check localStorage first for instant enrollment status (prevents flash)
-    const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
-    if (enrolledFromStorage === 'true') {
-      setIsEnrolled(true);
-    }
-    
-    // Then verify with API in background
+    // Always verify enrollment status with API on component mount/courseId change
+    // Don't use stale localStorage data - get fresh status from server
     checkEnrollmentStatus();
     
     // Fetch student progress from backend
@@ -146,25 +145,27 @@ export const StudentCourseDetail = () => {
         }
         // Refresh progress data
         await fetchStudentProgress();
-        alert('Successfully enrolled in the course!');
-        // Clear cache
+        success('Successfully enrolled in the course!');
+        // Clear caches to ensure fresh data on My Courses page
         apiCache.clear(`student:course:${courseId}`);
+        apiCache.clearPattern('enrolled:courses');
+        apiCache.clearPattern('all:courses');
       }
-    } catch (error) {
-      console.error('Failed to enroll:', error);
-      if (error.response?.status === 409) {
+    } catch (err) {
+      console.error('Failed to enroll:', err);
+      if (err.response?.status === 409) {
         // Already enrolled
         setIsEnrolled(true);
-        alert('You are already enrolled in this course');
-      } else if (error.response?.data?.message) {
-        alert(`Error: ${error.response.data.message}`);
-      } else if (error.response?.status === 401) {
-        alert('Session expired. Please login again.');
+        info('You are already enrolled in this course');
+      } else if (err.response?.data?.message) {
+        error(`Error: ${err.response.data.message}`);
+      } else if (err.response?.status === 401) {
+        error('Session expired. Please login again.');
         navigate('/login');
-      } else if (error.message === 'Network Error') {
-        alert('Network error. Please check your connection and try again.');
+      } else if (err.message === 'Network Error') {
+        error('Network error. Please check your connection and try again.');
       } else {
-        alert('Failed to enroll. Please try again.');
+        error('Failed to enroll. Please try again.');
       }
     } finally {
       setEnrolling(false);
@@ -172,7 +173,15 @@ export const StudentCourseDetail = () => {
   };
 
   const handleUnenroll = async () => {
-    if (!window.confirm('Are you sure you want to unenroll from this course?')) {
+    const confirmed = await showConfirm({
+      title: 'Unenroll from Course',
+      message: 'Are you sure you want to unenroll from this course? All your progress will be removed.',
+      confirmText: 'Unenroll',
+      cancelText: 'Cancel',
+      isDangerous: true
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -185,8 +194,17 @@ export const StudentCourseDetail = () => {
 
       if (response.data.success) {
         setIsEnrolled(false);
-        // Remove enrollment status from localStorage
+        
+        // Clear all progress data from localStorage
         localStorage.removeItem(`course_${courseId}_enrolled`);
+        localStorage.removeItem(`course_${courseId}_completed_lessons`);
+        localStorage.removeItem(`course_${courseId}_started`);
+        
+        // Reset progress counters
+        setCompletedLessonsCount(0);
+        setTotalLessonsCount(0);
+        setHasStartedLearning(false);
+        
         // Update course students count
         if (course) {
           setCourse({
@@ -194,21 +212,26 @@ export const StudentCourseDetail = () => {
             students_count: Math.max(0, (course.students_count || 1) - 1)
           });
         }
-        alert('Successfully unenrolled from the course');
+        
+        success('Successfully unenrolled from the course');
+        
+        // Clear caches to ensure fresh data on My Courses and All Courses pages
         apiCache.clear(`student:course:${courseId}`);
+        apiCache.clearPattern('enrolled:courses');
+        apiCache.clearPattern('all:courses');
       }
-    } catch (error) {
-      console.error('Failed to unenroll:', error);
-      if (error.response?.status === 404) {
+    } catch (err) {
+      console.error('Failed to unenroll:', err);
+      if (err.response?.status === 404) {
         setIsEnrolled(false);
-        alert('You are not enrolled in this course');
-      } else if (error.response?.data?.message) {
-        alert(`Error: ${error.response.data.message}`);
-      } else if (error.response?.status === 401) {
-        alert('Session expired. Please login again.');
+        error('You are not enrolled in this course');
+      } else if (err.response?.data?.message) {
+        error(`Error: ${err.response.data.message}`);
+      } else if (err.response?.status === 401) {
+        error('Session expired. Please login again.');
         navigate('/login');
       } else {
-        alert('Failed to unenroll. Please try again.');
+        error('Failed to unenroll. Please try again.');
       }
     } finally {
       setUnenrolling(false);
@@ -269,7 +292,7 @@ export const StudentCourseDetail = () => {
     const nextLesson = getNextIncompleteLesson();
     
     if (!nextLesson) {
-      alert('All lessons completed! Great job!');
+      success('All lessons completed! Great job!');
       return;
     }
 

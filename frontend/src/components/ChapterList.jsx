@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import LessonList from './LessonList';
+import EditLessonModal from './EditLessonModal';
 
-const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLessonModal, chapterLessons, onLessonCreated, onLoadLessons, onLessonDeleted }) => {
+const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLessonModal, chapterLessons, onLessonCreated, onLoadLessons, onLessonDeleted, onLessonUpdated }) => {
   const [expandedChapterId, setExpandedChapterId] = useState(null);
+  const [editingLesson, setEditingLesson] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const { error: showError } = useToast();
+  const { showConfirm } = useConfirm();
 
   const handleExpandChapter = async (chapterId) => {
     if (expandedChapterId === chapterId) {
@@ -28,7 +35,15 @@ const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLes
   };
 
   const handleDeleteChapter = async (chapterId) => {
-    if (window.confirm('Are you sure you want to delete this chapter and all its lessons?')) {
+    const confirmed = await showConfirm({
+      title: 'Delete Chapter',
+      message: 'Are you sure you want to delete this chapter and all its lessons?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true
+    });
+
+    if (confirmed) {
       try {
         await axios.delete(
           `${import.meta.env.VITE_API_URL}/courses/${courseId}/chapters/${chapterId}`
@@ -36,9 +51,23 @@ const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLes
         onChapterDeleted(chapterId);
       } catch (error) {
         console.error('Failed to delete chapter:', error);
-        alert('Failed to delete chapter');
+        showError('Failed to delete chapter');
       }
     }
+  };
+
+  const handleLessonEdit = (lesson) => {
+    setEditingLesson(lesson);
+    setEditModalOpen(true);
+  };
+
+  const handleLessonUpdated = (chapterId, updatedLesson) => {
+    // Call the parent's onLessonUpdated handler to properly update the lesson
+    if (onLessonUpdated) {
+      onLessonUpdated(chapterId, updatedLesson);
+    }
+    setEditingLesson(null);
+    setEditModalOpen(false);
   };
 
   return (
@@ -113,6 +142,7 @@ const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLes
                     lessons={chapterLessons[chapter.id] || []}
                     chapterId={chapter.id}
                     onLessonDeleted={onLessonDeleted}
+                    onLessonEdit={handleLessonEdit}
                   />
                 </div>
               </div>
@@ -120,6 +150,18 @@ const ChapterList = ({ chapters, courseId, onChapterDeleted, lessonModal, setLes
           </div>
         ))
       )}
+
+      {/* Edit Lesson Modal */}
+      <EditLessonModal
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingLesson(null);
+        }}
+        lesson={editingLesson}
+        chapterId={editingLesson?.chapter_id}
+        onLessonUpdated={handleLessonUpdated}
+      />
     </div>
   );
 };
