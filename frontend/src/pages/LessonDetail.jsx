@@ -24,8 +24,8 @@ export const LessonDetail = () => {
     setIsLessonCompleted(user?.role === 'teacher');
     
     // Check if this lesson was already marked completed by the student
-    if (user?.role !== 'teacher') {
-      const key = `course_${courseId}_completed_lessons`;
+    if (user?.role !== 'teacher' && user?.id) {
+      const key = `course_${courseId}_user_${user.id}_completed_lessons`;
       const completed = localStorage.getItem(key);
       const completedLessons = completed ? JSON.parse(completed) : [];
       if (completedLessons.includes(parseInt(lessonId))) {
@@ -34,7 +34,7 @@ export const LessonDetail = () => {
     }
     
     fetchLessonDetails();
-  }, [lessonId, chapterId, courseId, user?.role]);
+  }, [lessonId, chapterId, courseId, user?.role, user?.id]);
 
   const fetchLessonDetails = async () => {
     try {
@@ -148,14 +148,18 @@ export const LessonDetail = () => {
     // Mark lesson as complete
     setIsLessonCompleted(true);
     
-    // Save completed lesson to localStorage
-    const key = `course_${courseId}_completed_lessons`;
-    const completed = localStorage.getItem(key);
-    const completedLessons = completed ? JSON.parse(completed) : [];
-    
-    if (!completedLessons.includes(parseInt(lessonId))) {
-      completedLessons.push(parseInt(lessonId));
-      localStorage.setItem(key, JSON.stringify(completedLessons));
+    // Save completed lesson to localStorage with user ID to prevent cross-student data pollution
+    if (user?.id) {
+      const key = `course_${courseId}_user_${user.id}_completed_lessons`;
+      const completed = localStorage.getItem(key);
+      const completedLessons = completed ? JSON.parse(completed) : [];
+      
+      if (!completedLessons.includes(parseInt(lessonId))) {
+        completedLessons.push(parseInt(lessonId));
+        localStorage.setItem(key, JSON.stringify(completedLessons));
+      } else {
+        console.log(`Lesson ${lessonId} already marked as complete`);
+      }
     }
 
     // Save to backend
@@ -247,8 +251,8 @@ export const LessonDetail = () => {
 
       {/* Lesson Navigation Section */}
       <div className="border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">{lesson?.title}</h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2 break-words">{lesson?.title}</h1>
           {/* only show title, remove type icon/label for a shorter header */}
         </div>
       </div>

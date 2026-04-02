@@ -28,6 +28,34 @@ export const TeacherDashboard = () => {
     setIsInitialLoad(false);
   }, [user?.id, currentPage]);
 
+  // Auto-refresh student progress when modal is open
+  useEffect(() => {
+    if (!studentsModal.isOpen || !studentsModal.courseId) return;
+
+    // Refresh student progress data periodically
+    const refreshStudentsData = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/courses/${studentsModal.courseId}/students`,
+          { params: { per_page: 100 } }
+        );
+        if (response.data.success) {
+          setStudentsModal(prev => ({
+            ...prev,
+            students: response.data.data,
+            courseData: prev.courseData
+          }));
+        }
+      } catch (error) {
+        console.error('Auto-refresh failed:', error);
+      }
+    };
+
+    // Refresh every 3 seconds while modal is open
+    const interval = setInterval(refreshStudentsData, 3000);
+    return () => clearInterval(interval);
+  }, [studentsModal.isOpen, studentsModal.courseId]);
+
   const fetchCourses = async (page = 1) => {
     try {
       setLoading(true);
@@ -144,24 +172,54 @@ export const TeacherDashboard = () => {
     }
   };
 
-  const getStudentProgress = (student) => {
-    if (!studentsModal.courseData || !studentsModal.courseData.chapters) {
+  const handleRefreshStudents = async () => {
+    if (studentsModal.courseId) {
+      try {
+        setStudentsModal({ ...studentsModal, loading: true });
+        
+        // Fetch fresh student data
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/courses/${studentsModal.courseId}/students`,
+          { params: { per_page: 100 } }
+        );
+
+        if (response.data.success) {
+          setStudentsModal(prev => ({
+            ...prev,
+            students: response.data.data,
+            loading: false,
+            courseData: prev.courseData
+          }));
+          success('Student progress updated');
+        }
+      } catch (error) {
+        console.error('Failed to refresh students:', error);
+        showError('Failed to refresh student data');
+        setStudentsModal(prev => ({ ...prev, loading: false }));
+      }
+    }
+  };
+
+  const getStudentProgress = (student, courseData = null) => {
+    // Use passed courseData parameter, fall back to state if not provided
+    const data = courseData || studentsModal.courseData;
+    
+    if (!data || !data.chapters || data.chapters.length === 0) {
       return 0;
     }
 
     // Calculate total lessons in course
     let totalLessons = 0;
-    for (let chapter of studentsModal.courseData.chapters) {
-      if (chapter.lessons && chapter.lessons.length > 0) {
+    for (let chapter of data.chapters) {
+      if (chapter && chapter.lessons && chapter.lessons.length > 0) {
         totalLessons += chapter.lessons.length;
       }
     }
 
     if (totalLessons === 0) return 0;
 
-    // Get completed lessons from student data if available
-    // This will be enhanced once backend tracks student progress
-    const completedLessons = student.completed_lessons_count || 0;
+    // Get completed lessons from student data
+    const completedLessons = student?.completed_lessons_count || 0;
     return Math.round((completedLessons / totalLessons) * 100);
   };
 
@@ -183,14 +241,14 @@ export const TeacherDashboard = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
-        <div className="bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-2xl shadow-xl p-10 mb-12 text-white overflow-hidden relative fade-in">
+        <div className="bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-2xl shadow-xl p-6 sm:p-10 mb-12 text-white overflow-hidden relative fade-in">
           {/* Background decoration */}
           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
           
           <div className="relative">
-            <h2 className="text-5xl font-bold mb-4">Welcome, {user?.name}! 👨‍🏫</h2>
-            <p className="text-xl opacity-90 font-light">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-2 sm:mb-4">Welcome, {user?.name}! 👨‍🏫</h2>
+            <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">
               Manage your courses and track student progress
             </p>
           </div>
@@ -429,17 +487,29 @@ export const TeacherDashboard = () => {
         {studentsModal.isOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
-                <div>
+              <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between gap-4">
+                <div className="flex-1">
                   <h2 className="text-2xl font-bold text-slate-900">Enrolled Students</h2>
                   <p className="text-slate-600 text-sm mt-1">{studentsModal.courseName}</p>
                 </div>
-                <button
-                  onClick={() => setStudentsModal({ ...studentsModal, isOpen: false })}
-                  className="text-slate-500 hover:text-slate-700 text-2xl leading-none"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={handleRefreshStudents}
+                    disabled={studentsModal.loading}
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Refresh student progress"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setStudentsModal({ ...studentsModal, isOpen: false })}
+                    className="text-slate-500 hover:text-slate-700 text-2xl leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               <div className="p-6">
@@ -454,9 +524,9 @@ export const TeacherDashboard = () => {
                 ) : (
                   <div className="space-y-3">
                     {studentsModal.students.map((student) => {
-                      const progress = getStudentProgress(student);
-                      const totalLessons = studentsModal.courseData?.chapters?.reduce((total, ch) => total + (ch.lessons?.length || 0), 0) || 0;
-                      const completedLessons = student.completed_lessons_count || 0;
+                      const progress = getStudentProgress(student, studentsModal.courseData);
+                      const totalLessons = studentsModal.courseData?.chapters?.reduce((total, ch) => total + (ch?.lessons?.length || 0), 0) || 0;
+                      const completedLessons = student?.completed_lessons_count || 0;
                       
                       return (
                         <div 

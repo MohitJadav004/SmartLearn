@@ -41,11 +41,7 @@ SmartLearn is a comprehensive learning management system (LMS) built with modern
 - 🎥 Video Streaming
 - ✍️ Student Enrollment
 - 📊 Progress Analytics
-- 🧪 Quizzes and Assessments
-- 🏆 Certificates
-- 💬 Discussion Forums
-- 📧 Email Notifications
-- 💳 Payment Integration
+
 
 ---
 

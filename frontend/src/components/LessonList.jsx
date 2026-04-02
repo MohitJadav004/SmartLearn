@@ -60,39 +60,38 @@ const LessonList = ({ lessons, chapterId, onLessonDeleted, onLessonEdit }) => {
         Array.isArray(lessons) && lessons.map((lesson) => (
           lesson && lesson.id ? (
             <div key={lesson.id} className="bg-white/60 backdrop-blur-sm border border-slate-200 rounded-xl p-3 hover:bg-white/80 hover:border-sky-200 transition-all group">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-start gap-4 flex-1 cursor-pointer" onClick={() => handleViewLesson(lesson.id)}>
-
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
+                <div className="flex items-start gap-4 flex-1 cursor-pointer min-w-0" onClick={() => handleViewLesson(lesson.id)}>
                   <div className="flex-1 min-w-0">
-                    <h5 className="font-bold text-slate-900 group-hover:text-sky-600 transition-colors text-base">{lesson.title}</h5>
+                    <h5 className="font-bold text-slate-900 group-hover:text-sky-600 transition-colors text-sm sm:text-base break-words">{lesson.title}</h5>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 flex-shrink-0 w-full sm:w-auto justify-end sm:justify-start opacity-100 transition-opacity">
                   <button
                     onClick={() => onLessonEdit(lesson)}
-                    className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition-all"
+                    className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition-all flex-shrink-0"
                     title="Edit lesson"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 sm:w-5 h-4 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
                   <button
                     onClick={() => handleViewLesson(lesson.id)}
-                    className="p-2 rounded-lg hover:bg-sky-100 text-sky-600 transition-all"
+                    className="p-2 rounded-lg hover:bg-sky-100 text-sky-600 transition-all flex-shrink-0"
                     title="View lesson"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 sm:w-5 h-4 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   </button>
                   <button
                     onClick={() => handleDeleteLesson(lesson.id)}
-                    className="p-2 rounded-lg hover:bg-red-100 text-red-600 transition-all"
+                    className="p-2 rounded-lg hover:bg-red-100 text-red-600 transition-all flex-shrink-0"
                     title="Delete lesson"
                   >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 sm:w-5 h-4 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   </button>

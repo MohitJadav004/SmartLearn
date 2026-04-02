@@ -162,8 +162,8 @@ export const CourseDetail = () => {
 
       {/* Title Section */}
       <div className="border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h2 className="text-4xl font-bold text-slate-900">{course?.title}</h2>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 break-words">{course?.title}</h2>
         </div>
       </div>
 
@@ -183,14 +183,6 @@ export const CourseDetail = () => {
                     }`}>
                       {course?.status}
                     </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm font-medium text-gray-600">3.5</span>
-                      <div className="flex gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-lg ${i < 4 ? 'text-yellow-400' : 'text-gray-300'}`}>★</span>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

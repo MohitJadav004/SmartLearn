@@ -192,7 +192,7 @@ export const Register = () => {
               </button>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
-              <span className="text-sky-600">💡</span> At least 7 characters
+              <span className="text-sky-600">💡</span> At least 8 characters
             </p>
           </div>
 

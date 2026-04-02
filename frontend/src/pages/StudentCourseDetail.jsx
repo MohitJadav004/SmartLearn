@@ -16,7 +16,14 @@ export const StudentCourseDetail = () => {
   const { showConfirm } = useConfirm();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isEnrolled, setIsEnrolled] = useState(location.state?.isEnrolled ?? false);
+  // Initialize from localStorage to avoid flashing "Enroll now" when returning from lesson
+  const [isEnrolled, setIsEnrolled] = useState(() => {
+    const enrolledFromLocation = location.state?.isEnrolled;
+    if (enrolledFromLocation !== undefined) return enrolledFromLocation;
+    // Check localStorage next
+    const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
+    return enrolledFromStorage === 'true';
+  });
   const [enrolling, setEnrolling] = useState(false);
   const [unenrolling, setUnenrolling] = useState(false);
   const [hasStartedLearning, setHasStartedLearning] = useState(false);
@@ -56,8 +63,13 @@ export const StudentCourseDetail = () => {
     if (!user) return;
     
     try {
-      // Always call API to get fresh enrollment status
-      // Don't rely on localStorage as it can become stale
+      // Check localStorage first to avoid UI flashing
+      const enrolledFromStorage = localStorage.getItem(`course_${courseId}_enrolled`);
+      if (enrolledFromStorage === 'true') {
+        setIsEnrolled(true);
+      }
+      
+      // Verify with API in background (but don't reset if verification fails)
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/courses/${courseId}/check-enrollment`
       );
@@ -66,40 +78,44 @@ export const StudentCourseDetail = () => {
       if (response.data.enrolled) {
         localStorage.setItem(`course_${courseId}_enrolled`, 'true');
       } else {
-        // Clear the enrolled flag if user is not enrolled
+        // Only clear if API confirms not enrolled
         localStorage.removeItem(`course_${courseId}_enrolled`);
       }
     } catch (error) {
       console.error('Failed to check enrollment status:', error);
+      // Keep the existing state on error (don't flash enrollment status changes)
     }
   }, [courseId, user]);
 
   const fetchStudentProgress = useCallback(async () => {
     try {
-      console.log('Fetching student progress for course:', courseId);
+      console.log('Fetching fresh student progress for course:', courseId);
+      // Don't use cache for progress - always get fresh data
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/courses/${courseId}/progress`
       );
-      console.log('Progress response:', response.data);
+      console.log('Fresh progress response:', response.data);
       if (response.data.success) {
-        setCompletedLessonsCount(response.data.data.completed_lessons);
-        setTotalLessonsCount(response.data.data.total_lessons);
-        console.log('Updated progress - Completed:', response.data.data.completed_lessons, 'Total:', response.data.data.total_lessons);
+        const completed = response.data.data.completed_lessons || 0;
+        const total = response.data.data.total_lessons || 0;
+        console.log('Setting progress - Completed:', completed, 'Total:', total, 'Percentage:', response.data.data.progress_percentage);
+        setCompletedLessonsCount(completed);
+        setTotalLessonsCount(total);
       }
     } catch (error) {
       console.error('Failed to fetch progress:', error);
-      // Fall back to localStorage calculation
+      // Don't fall back to localStorage - wait for API response
     }
   }, [courseId]);
 
   useEffect(() => {
+    // Always fetch fresh course details on mount or courseId change
     fetchCourseDetails();
     
     // Always verify enrollment status with API on component mount/courseId change
-    // Don't use stale localStorage data - get fresh status from server
     checkEnrollmentStatus();
     
-    // Fetch student progress from backend
+    // Always fetch fresh student progress (don't use cache for progress)
     if (user) {
       fetchStudentProgress();
     }
@@ -110,13 +126,27 @@ export const StudentCourseDetail = () => {
 
     // Refresh progress when window regains focus (user returns from lesson)
     const handleFocus = () => {
+      console.log('Window regained focus, refreshing progress...');
       if (user) {
         fetchStudentProgress();
       }
     };
 
+    // Also refresh progress on visibility change (when tab becomes visible)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        console.log('Tab became visible, refreshing progress...');
+        fetchStudentProgress();
+      }
+    };
+
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchCourseDetails, checkEnrollmentStatus, courseId, user, fetchStudentProgress]);
 
   const handleEnroll = async () => {
@@ -197,7 +227,10 @@ export const StudentCourseDetail = () => {
         
         // Clear all progress data from localStorage
         localStorage.removeItem(`course_${courseId}_enrolled`);
-        localStorage.removeItem(`course_${courseId}_completed_lessons`);
+        // Clear user-specific completed lessons
+        if (user?.id) {
+          localStorage.removeItem(`course_${courseId}_user_${user.id}_completed_lessons`);
+        }
         localStorage.removeItem(`course_${courseId}_started`);
         
         // Reset progress counters
@@ -239,11 +272,33 @@ export const StudentCourseDetail = () => {
   };
 
   const getCompletedLessons = () => {
-    const completed = localStorage.getItem(`course_${courseId}_completed_lessons`);
-    return completed ? JSON.parse(completed) : [];
+    // Only return completed lessons for enrolled students
+    if (!isEnrolled || !user) {
+      return [];
+    }
+    
+    // Include user ID in key to prevent different students seeing each other's progress
+    const key = `course_${courseId}_user_${user.id}_completed_lessons`;
+    const completed = localStorage.getItem(key);
+    let result = [];
+    try {
+      result = completed ? JSON.parse(completed) : [];
+      if (!Array.isArray(result)) {
+        result = [];
+      }
+    } catch (e) {
+      console.error('Error parsing localStorage JSON:', e);
+      result = [];
+    }
+    return result;
   };
 
   const getNextIncompleteLesson = () => {
+    // Only allow starting lessons if enrolled
+    if (!isEnrolled) {
+      return null;
+    }
+    
     const completedLessons = getCompletedLessons();
     
     if (!course || !course.chapters || course.chapters.length === 0) {
@@ -269,23 +324,20 @@ export const StudentCourseDetail = () => {
       return 0;
     }
 
-    // If we have API data, use that
-    if (totalLessonsCount > 0) {
-      return Math.round((completedLessonsCount / totalLessonsCount) * 100);
-    }
-
-    // Fall back to localStorage calculation
+    // Calculate from course chapters (most reliable)
     let totalLessons = 0;
     for (let chapter of course.chapters) {
-      if (chapter.lessons && chapter.lessons.length > 0) {
+      if (chapter && chapter.lessons && chapter.lessons.length > 0) {
         totalLessons += chapter.lessons.length;
       }
     }
 
     if (totalLessons === 0) return 0;
 
+    // Get completed lessons from localStorage
     const completedLessons = getCompletedLessons();
-    return Math.round((completedLessons.length / totalLessons) * 100);
+    const percentage = Math.round((completedLessons.length / totalLessons) * 100);
+    return percentage;
   };
 
   const handleStartLearning = () => {
@@ -352,9 +404,9 @@ export const StudentCourseDetail = () => {
 
       {/* Title Section */}
       <div className="border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h2 className="text-4xl font-bold text-slate-900">{course.title}</h2>
-          <p className="text-slate-600 mt-2">By {course.teacher?.name || 'Unknown Instructor'}</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 break-words">{course.title}</h2>
+          <p className="text-sm sm:text-base text-slate-600 mt-2">By {course.teacher?.name || 'Unknown Instructor'}</p>
         </div>
       </div>
 
@@ -439,7 +491,8 @@ export const StudentCourseDetail = () => {
                       {chapter.lessons && chapter.lessons.length > 0 && (
                         <div className="p-4 space-y-2">
                           {chapter.lessons.map((lesson, lessonIdx) => {
-                            const isCompleted = getCompletedLessons().includes(lesson.id);
+                            // Only show completion for enrolled students
+                            const isCompleted = isEnrolled ? getCompletedLessons().includes(lesson.id) : false;
                             return (
                               <button
                                 key={lesson.id}
@@ -484,7 +537,7 @@ export const StudentCourseDetail = () => {
             <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-6 border border-slate-200">
               {/* Course Stats */}
               <div className="mb-6 pb-6 border-b border-slate-200">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div>
                     <p className="text-xs font-medium text-slate-500 uppercase">Students</p>
                     <p className="text-2xl font-bold text-slate-900">{course.students_count || 0}</p>

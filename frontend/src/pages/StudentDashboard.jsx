@@ -13,14 +13,14 @@ export const StudentDashboard = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
-        <div className="bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 rounded-2xl shadow-xl p-10 mb-12 text-white overflow-hidden relative fade-in">
+        <div className="bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 rounded-2xl shadow-xl p-6 sm:p-10 mb-12 text-white overflow-hidden relative fade-in">
           {/* Background decoration */}
           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
           
           <div className="relative">
-            <h2 className="text-5xl font-bold mb-4">Welcome back, {user?.name}! 👋</h2>
-            <p className="text-xl opacity-90 font-light">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-2 sm:mb-4">Welcome back, {user?.name}! 👋</h2>
+            <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">
               Explore and enroll in published courses to start your learning journey
             </p>
           </div>
